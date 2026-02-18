@@ -2,6 +2,22 @@ import streamlit as st
 import pandas as pd
 import datetime
 
+# 1. Force iPad-friendly wide layout
+st.set_page_config(layout="wide")
+
+# 2. Load your uploaded data
+@st.cache_data
+def load_data():
+    # Use the exact filenames you uploaded to GitHub
+    courses = pd.read_excel("scheduler master data updated.xlsx", sheet_name="COURSES_5388")
+    rooms = pd.read_excel("scheduler master data updated.xlsx", sheet_name="ROOMS")
+    return courses, rooms
+
+try:
+    df_courses, df_rooms = load_data()
+    st.success("26-27 Data Loaded Successfully!")
+except Exception as e:
+    st.error(f"Error: {e}. Check if openpyxl is in requirements.txt")
 # --- CONFIGURATION & DATA ---
 st.set_page_config(layout="wide", page_title="DEP Electroméc 26-27 Scheduler")
 
