@@ -51,7 +51,7 @@ def generate_view():
     # Placeholder for the calculated data
     # This logic implements the 30hr/week rule across P1 & P2 
     data = []
-    start_date = datetime.date(2026, 8, 24) [cite: 1]
+    start_date = datetime.date(2026, 8, 24)
     
     # Example logic for ELEM261 (First 5388 Cohort)
     # Week 1: 15h Métier + 15h Math (meeting 30h requirement) 
@@ -74,7 +74,7 @@ st.table(pivot_df)
 
 st.subheader("Room Occupancy Heatmap")
 # This section flags if a room like C002 exceeds 2 groups 
-st.warning("C002 Capacity: 1/2 Groups Assigned for selected week.") [cite: 3]
+st.warning("C002 Capacity: 1/2 Groups Assigned for selected week.")
 
 
 
