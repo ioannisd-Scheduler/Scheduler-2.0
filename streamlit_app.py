@@ -1,82 +1,146 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 import datetime
+import os
 
-# 1. Force iPad-friendly wide layout
-st.set_page_config(layout="wide")
+# 1. Page Configuration
+st.set_page_config(layout="wide", page_title="DEP 26-27 Visual Scheduler")
 
-# 2. Load your uploaded data
+# 2. Define the 2026-2027 Calendar (Holidays & Ped Days)
+HOLIDAYS_26_27 = [
+    datetime.date(2026, 9, 7),   # Labor Day
+    datetime.date(2026, 10, 12),  # Thanksgiving
+    datetime.date(2027, 4, 19),   # Easter
+    datetime.date(2027, 5, 24),   # Patriots' Day
+    datetime.date(2027, 6, 24),   # Saint-Jean
+]
+
+# Simulate the 10 missing Ped Days (usually one Friday per month)
+PED_DAYS = [
+    datetime.date(2026, 9, 25), datetime.date(2026, 10, 23), datetime.date(2026, 11, 20),
+    datetime.date(2026, 12, 11), datetime.date(2027, 1, 22), datetime.date(2027, 2, 12),
+    datetime.date(2027, 3, 19), datetime.date(2027, 4, 23), datetime.date(2027, 5, 14),
+    datetime.date(2027, 6, 11)
+]
+
+OFF_DAYS = set(HOLIDAYS_26_27 + PED_DAYS)
+
+# 3. Data Loading (Safe Pathing)
 @st.cache_data
-def load_data():
-    # Use the exact filenames you uploaded to GitHub
-    courses = pd.read_excel("scheduler master data updated.xlsx", sheet_name="COURSES_5388")
-    rooms = pd.read_excel("scheduler master data updated.xlsx", sheet_name="ROOMS")
+def load_all_data():
+    base_path = os.path.dirname(__file__)
+    courses_path = os.path.join(base_path, "scheduler master data updated.xlsx")
+    
+    # Reading 5388 Curriculum and Rooms
+    courses = pd.read_excel(courses_path, sheet_name="COURSES_5388")
+    rooms = pd.read_excel(courses_path, sheet_name="ROOMS")
     return courses, rooms
 
-try:
-    df_courses, df_rooms = load_data()
-    st.success("26-27 Data Loaded Successfully!")
-except Exception as e:
-    st.error(f"Error: {e}. Check if openpyxl is in requirements.txt")
-# --- CONFIGURATION & DATA ---
-st.set_page_config(layout="wide", page_title="DEP Electroméc 26-27 Scheduler")
-
-# Mocking the load of your CSV data into a clean dictionary
-# In production, this replaces the read_csv calls
-ROOM_DATA = {
-    'B007': {'cap': 16, 'attr': 'Miniusine'},
-    'B010': {'cap': 16, 'attr': 'Laptops/Conco'},
-    'B013': {'cap': 22, 'attr': 'Desktops'},
-    'B014': {'cap': 22, 'attr': 'Electronics/C4/C10'},
-    'B015': {'cap': 22, 'attr': 'Pneumatics/208V'},
-    'B107': {'cap': 16, 'attr': 'C24 Exclusive'},
-    'C001': {'cap': 22, 'attr': 'Hydraulics'},
-    'C002': {'cap': 22, 'attr': 'Machine Shop (Max 2 Groups)'},
-}
-
-# --- APP UI ---
-st.title("🛠️ 2026-2027 Program Scheduler (5388 Transition)")
-st.sidebar.header("Parameters")
-
-# User Input for C2 Delay
-c2_delay_weeks = st.sidebar.slider("C2 (Santé Sécurité) Delay (Weeks)", 1, 4, 1)
-
-# User Input for Ped Days (Simulating the 10 missing days)
-ped_day_count = st.sidebar.number_input("Additional Ped Days to Simulate", 0, 20, 10)
-
-st.sidebar.info("Rule R034: No gaps. Course B starts the same period Course A ends.")
-
-# --- SCHEDULING ENGINE ---
-def generate_view():
-    # Placeholder for the calculated data
-    # This logic implements the 30hr/week rule across P1 & P2 
-    data = []
-    start_date = datetime.date(2026, 8, 24)
+# 4. The Scheduling Logic (The Engine)
+def schedule_cohort_visual(cohort_id, courses_df, start_date, c2_delay_weeks):
+    schedule = []
+    current_date = start_date
     
-    # Example logic for ELEM261 (First 5388 Cohort)
-    # Week 1: 15h Métier + 15h Math (meeting 30h requirement) 
-    for d in range(5):
-        current_date = start_date + datetime.timedelta(days=d)
-        data.append({"Date": current_date, "Period": "Day P1", "Cohort": "ELEM261", "Room": "B013", "Course": "M1: Métier"})
-        data.append({"Date": current_date, "Period": "Day P2", "Cohort": "ELEM261", "Room": "B013", "Course": "M1/Math"})
+    # Define the 5388 Course Sequence with the 1-week C2 Delay
+    # M1 (15h) + Math (15h) -> Week 1
+    # M2 (30h) -> starts Week 2
+    sequence = [
+        {'id': 'M1', 'name': 'Métier et formation', 'hours': 15, 'color': '#1f77b4'},
+        {'id': 'MATH', 'name': 'Mathématique (P1)', 'hours': 15, 'color': '#ff7f0e'},
+        {'id': 'M2', 'name': 'Santé et Sécurité', 'hours': 30, 'color': '#d62728'},
+    ]
+    
+    # Add remaining 5388 modules
+    for _, row in courses_df.iterrows():
+        if row['Module_Number'] > 2:
+            sequence.append({
+                'id': str(row['Course_Code']),
+                'name': row['Course_Name'],
+                'hours': row['Hours_Required'],
+                'color': '#2ca02c' if 'M' in str(row['Category']) else '#9467bd'
+            })
 
-    return pd.DataFrame(data)
+    for item in sequence:
+        remaining_hours = item['hours']
+        course_start = None
+        
+        while remaining_hours > 0:
+            # Skip weekends and Off-Days
+            if current_date.weekday() >= 5 or current_date in OFF_DAYS:
+                current_date += datetime.timedelta(days=1)
+                continue
+            
+            if course_start is None:
+                course_start = current_date
+            
+            # Apply 6 hours per day (No Gap Logic)
+            hours_today = min(remaining_hours, 6)
+            remaining_hours -= hours_today
+            
+            if remaining_hours <= 0:
+                # Add to schedule when module is finished
+                schedule.append({
+                    "Cohort": cohort_id,
+                    "Task": f"{item['id']}: {item['name']}",
+                    "Start": course_start,
+                    "Finish": current_date + datetime.timedelta(days=1), # For Plotly rendering
+                    "Resource": item['id'],
+                    "Color": item['color']
+                })
+            
+            current_date += datetime.timedelta(days=1)
+            
+    return schedule
 
-# --- VISUALIZATION ---
-df = generate_view()
+# 5. UI Layout
+st.title("📅 Visualiseur d'horaire 2026-2027")
+st.sidebar.header("Configurations")
+c2_delay = st.sidebar.slider("Délai C2 (Semaines)", 1, 3, 1)
 
-st.subheader("Granular Daily Period View")
-st.write("Drill down into specific room assignments with zero overlap.")
+try:
+    df_courses, df_rooms = load_all_data()
+    
+    # Generate all planned 26-27 cohorts
+    cohorts = [
+        ("ELEM261 (Day)", datetime.date(2026, 8, 24)),
+        ("ELEM262 (Night)", datetime.date(2026, 10, 5)),
+        ("ELEM263 (Day)", datetime.date(2026, 11, 16)),
+        ("ELEM264 (Night)", datetime.date(2027, 1, 25)),
+        ("ELEM266 (Day)", datetime.date(2027, 3, 8))
+    ]
 
-# Creating a Matrix View (Date vs Period)
-pivot_df = df.pivot(index='Date', columns='Period', values='Course')
-st.table(pivot_df)
+    all_data = []
+    for cid, start in cohorts:
+        all_data.extend(schedule_cohort_visual(cid, df_courses, start, c2_delay))
 
-st.subheader("Room Occupancy Heatmap")
-# This section flags if a room like C002 exceeds 2 groups 
-st.warning("C002 Capacity: 1/2 Groups Assigned for selected week.")
+    full_df = pd.DataFrame(all_data)
 
+    # 6. Create the Interactive Gantt Chart
+    fig = px.timeline(
+        full_df, 
+        x_start="Start", 
+        x_end="Finish", 
+        y="Cohort", 
+        color="Cohort",
+        hover_data=["Task"],
+        title="Flux des Cohortes 5388 - Année Scolaire 26-27"
+    )
 
+    fig.update_yaxes(autorange="reversed") # Highest cohort at the top
+    fig.update_layout(
+        height=600,
+        xaxis_title="Calendrier",
+        yaxis_title="Groupes",
+        hovermode="closest"
+    )
 
-# --- EXPORT ---
-st.download_button("Export 26-27 Granular CSV", df.to_csv(), "schedule_26_27.csv")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # 7. Drill-Down Table
+    st.subheader("Détails des périodes")
+    st.dataframe(full_df[['Cohort', 'Task', 'Start', 'Finish']], use_container_width=True)
+
+except Exception as e:
+    st.error(f"Erreur de chargement: {e}")
+    st.info("Vérifiez que 'openpyxl' et 'plotly' sont dans votre requirements.txt")
