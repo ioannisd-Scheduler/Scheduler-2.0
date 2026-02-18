@@ -39,12 +39,12 @@ st.title("🛠️ 2026-2027 Program Scheduler (5388 Transition)")
 st.sidebar.header("Parameters")
 
 # User Input for C2 Delay
-c2_delay_weeks = st.sidebar.slider("C2 (Santé Sécurité) Delay (Weeks)", 1, 4, 1) [cite: 1]
+c2_delay_weeks = st.sidebar.slider("C2 (Santé Sécurité) Delay (Weeks)", 1, 4, 1)
 
 # User Input for Ped Days (Simulating the 10 missing days)
 ped_day_count = st.sidebar.number_input("Additional Ped Days to Simulate", 0, 20, 10)
 
-st.sidebar.info("Rule R034: No gaps. Course B starts the same period Course A ends.") [cite: 1]
+st.sidebar.info("Rule R034: No gaps. Course B starts the same period Course A ends.")
 
 # --- SCHEDULING ENGINE ---
 def generate_view():
