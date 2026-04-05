@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.venv/
+env/
+venv/
+
+# Property app data (contains PII and uploaded files)
+property_app/data/property_mgmt.db
+property_app/data/receipts/*
+!property_app/data/receipts/.gitkeep
